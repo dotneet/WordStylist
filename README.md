@@ -1,3 +1,14 @@
+
+
+```
+# CPU推論
+# sd15/vae に .bin のvae重みを配置。safetensorsだとエラーになる。
+# 重みの場所
+# https://huggingface.co/runwayml/stable-diffusion-v1-5
+python train.py --dataset other --device cpu --stable_dif_path "./sd15"
+```
+
+
 # Official PyTorch Implementation of "WordStylist: Styled Verbatim Handwritten Text Generation with Latent Diffusion Models" - ICDAR 2023
 
 <!-- 

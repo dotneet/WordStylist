@@ -1,4 +1,5 @@
 import os
+import sys
 import torch
 import torch.nn as nn
 import numpy as np
@@ -13,10 +14,11 @@ import json
 from diffusers import AutoencoderKL
 from unet import UNetModel
 import wandb
+from datasets import load_dataset
 
-MAX_CHARS = 10
+MAX_CHARS = 100
 OUTPUT_MAX_LEN = MAX_CHARS #+ 2  # <GO>+groundtruth+<END>
-c_classes = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+c_classes = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz 0123456789.,!?-:;()&/\'"\\@#$%^*+=_{}[]<>'
 cdict = {c:i for i,c in enumerate(c_classes)}
 icdict = {i:c for i,c in enumerate(c_classes)}
 
@@ -59,9 +61,9 @@ def labelDictionary():
 char_classes, letter2index, index2letter = labelDictionary()
 tok = False
 if not tok:
-    tokens = {"PAD_TOKEN": 52}
+    tokens = {"PAD_TOKEN": 92}
 else:
-    tokens = {"GO_TOKEN": 52, "END_TOKEN": 53, "PAD_TOKEN": 54}
+    tokens = {"GO_TOKEN": 92, "END_TOKEN": 93, "PAD_TOKEN": 94}
 num_tokens = len(tokens.keys())
 print('num_tokens', num_tokens)
 
@@ -100,13 +102,21 @@ class IAMDataset(Dataset):
 
     
     def __getitem__(self, idx):
-        image_name = self.data_dict[self.indices[idx]]['image']
+        # image_name = self.data_dict[self.indices[idx]]['image']
+        # label = self.data_dict[self.indices[idx]]['label']
+        # wr_id = self.data_dict[self.indices[idx]]['s_id']
+        # wr_id = torch.tensor(self.writer_dict[wr_id]).to(torch.int64)
+        # img_path = os.path.join(self.image_path, image_name)
+        
+        # image = Image.open(img_path).convert('RGB')
+        # image = self.transforms(image)
+
+        image = self.data_dict[self.indices[idx]]['image']
         label = self.data_dict[self.indices[idx]]['label']
         wr_id = self.data_dict[self.indices[idx]]['s_id']
         wr_id = torch.tensor(self.writer_dict[wr_id]).to(torch.int64)
-        img_path = os.path.join(self.image_path, image_name)
         
-        image = Image.open(img_path).convert('RGB')
+        image = image.convert("RGB")
         image = self.transforms(image)
         
         word_embedding = label_padding(label, num_tokens) 
@@ -292,7 +302,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=1000)
     parser.add_argument('--batch_size', type=int, default=224)
-    parser.add_argument('--num_workers', type=int, default=4) 
+    parser.add_argument('--num_workers', type=int, default=1) 
     parser.add_argument('--img_size', type=int, default=(64, 256))  
     parser.add_argument('--dataset', type=str, default='iam', help='iam or other dataset') 
     parser.add_argument('--iam_path', type=str, default='/path/to/iam/images/', help='path to iam dataset (images 64x256)')
@@ -323,15 +333,19 @@ def main():
 
     print('character vocabulary size', vocab_size)
     
+    train_dataset = load_dataset('gagan3012/IAM', split='train')
+
+    transforms = torchvision.transforms.Compose([
+                    torchvision.transforms.Resize(args.img_size),
+                    torchvision.transforms.ToTensor(),
+                    torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+                        ])
+
     if args.dataset == 'iam':
         class_dict = {}
         for i, j in enumerate(os.listdir(f'{args.iam_path}')):
             class_dict[j] = i
 
-        transforms = torchvision.transforms.Compose([
-                        torchvision.transforms.ToTensor(),
-                        torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-                            ])
 
         with open(args.gt_train, 'r') as f:
             train_data = f.readlines()
@@ -367,7 +381,19 @@ def main():
         train_ds = IAMDataset(full_dict, args.iam_path, wr_dict, args, transforms=transforms)
         
         train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+    elif args.dataset == 'other':
+        train_dataset = load_dataset('gagan3012/IAM', split='train')
     
+        s_id = "1"
+        wr_dict = {"1": 0}
+        full_dict = {}
+        for i in range(len(train_dataset)):
+            item = train_dataset[i]
+            full_dict[i] = {'image': item['image'], 's_id': s_id, 'label':item['text']}
+        train_ds = IAMDataset(full_dict, args.iam_path, wr_dict, args, transforms=transforms)
+        train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+        style_classes=len(wr_dict)
+
     unet = UNetModel(image_size = args.img_size, in_channels=args.channels, model_channels=args.emb_dim, out_channels=args.channels, num_res_blocks=args.num_res_blocks, attention_resolutions=(1,1), channel_mult=(1, 1), num_heads=args.num_heads, num_classes=style_classes, context_dim=args.emb_dim, vocab_size=vocab_size, args=args, max_seq_len=OUTPUT_MAX_LEN).to(args.device)    
     
     optimizer = optim.AdamW(unet.parameters(), lr=0.0001)

@@ -1,0 +1,12 @@
+torch
+torchvision
+numpy
+Pillow
+tqdm
+argparse
+jsonargparse
+diffusers["torch"]
+wandb
+datasets
+einops
+omegaconf
