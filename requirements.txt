@@ -5,7 +5,7 @@ Pillow
 tqdm
 argparse
 jsonargparse
-diffusers["torch"]
+diffusers[torch]
 wandb
 datasets
 einops
