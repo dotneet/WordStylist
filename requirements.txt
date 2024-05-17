@@ -1,5 +1,10 @@
-torch
-torchvision
+# GPU環境の場合
+# --extra-index-url https://download.pytorch.org/whl/cu118
+
+# cuda 1.18向けのバージョンを指定
+torch==2.1.2
+torchvision==0.16.2
+
 numpy
 Pillow
 tqdm

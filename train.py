@@ -281,7 +281,8 @@ def train(diffusion, model, ema, ema_model, vae, optimizer, mse_loss, loader, nu
             #     n=16
             #     labels = image_features
             # else:
-            labels = torch.arange(16).long().to(args.device)
+            # labels = torch.arange(16).long().to(args.device)
+            labels = torch.arange(min(num_classes, 16)).long().to(args.device)
             n=len(labels)
         
             
@@ -333,8 +334,6 @@ def main():
 
     print('character vocabulary size', vocab_size)
     
-    train_dataset = load_dataset('gagan3012/IAM', split='train')
-
     transforms = torchvision.transforms.Compose([
                     torchvision.transforms.Resize(args.img_size),
                     torchvision.transforms.ToTensor(),
@@ -382,7 +381,7 @@ def main():
         
         train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     elif args.dataset == 'other':
-        train_dataset = load_dataset('gagan3012/IAM', split='train')
+        train_dataset = load_dataset('gagan3012/IAM', split='train[0:100]')
     
         s_id = "1"
         wr_dict = {"1": 0}
