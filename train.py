@@ -15,6 +15,7 @@ from diffusers import AutoencoderKL
 from unet import UNetModel
 import wandb
 from datasets import load_dataset
+from prepare_images import resize_pad
 
 MAX_CHARS = 100
 OUTPUT_MAX_LEN = MAX_CHARS #+ 2  # <GO>+groundtruth+<END>
@@ -276,7 +277,7 @@ def train(diffusion, model, ema, ema_model, vae, optimizer, mse_loss, loader, nu
             pbar.set_postfix(MSE=loss.item())
             
     
-        if epoch % 100 == 0:
+        if epoch % 20 == 0:
             # if args.img_feat is True:
             #     n=16
             #     labels = image_features
@@ -304,7 +305,7 @@ def main():
     parser.add_argument('--epochs', type=int, default=1000)
     parser.add_argument('--batch_size', type=int, default=224)
     parser.add_argument('--num_workers', type=int, default=1) 
-    parser.add_argument('--img_size', type=int, default=(64, 256))  
+    parser.add_argument('--img_size', nargs="+", type=int, default=[64, 256])
     parser.add_argument('--dataset', type=str, default='iam', help='iam or other dataset') 
     parser.add_argument('--iam_path', type=str, default='/path/to/iam/images/', help='path to iam dataset (images 64x256)')
     parser.add_argument('--gt_train', type=str, default='./gt/gan.iam.tr_va.gt.filter27')
@@ -335,7 +336,6 @@ def main():
     print('character vocabulary size', vocab_size)
     
     transforms = torchvision.transforms.Compose([
-                    torchvision.transforms.Resize(args.img_size),
                     torchvision.transforms.ToTensor(),
                     torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
                         ])
@@ -381,14 +381,18 @@ def main():
         
         train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     elif args.dataset == 'other':
-        train_dataset = load_dataset('gagan3012/IAM', split='train[0:100]')
+        # train_dataset = load_dataset('gagan3012/IAM', split='train[0:100]')
+        train_dataset = load_dataset('gagan3012/IAM', split='train[0:2000]')
     
         s_id = "1"
         wr_dict = {"1": 0}
         full_dict = {}
         for i in range(len(train_dataset)):
             item = train_dataset[i]
-            full_dict[i] = {'image': item['image'], 's_id': s_id, 'label':item['text']}
+            img_height = args.img_size[0]
+            img_width = args.img_size[1]
+            image = resize_pad(item['image'], img_width, img_height)
+            full_dict[i] = {'image': image, 's_id': s_id, 'label':item['text']}
         train_ds = IAMDataset(full_dict, args.iam_path, wr_dict, args, transforms=transforms)
         train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
         style_classes=len(wr_dict)
